@@ -1,30 +1,51 @@
 version: '3.2'
 services:
-  proxy:
-    build: ./proxy
-    ports: 
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - web
+  traefik:
+    image: traefik:v2.1
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --api.insecure=true
+      - --providers.docker
+      - --providers.file.directory=/etc/traefik/dynamic_conf
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      # So that Traefik can listen to the Docker events
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./certs/:/certs/:ro
+      - ./traefik.yml:/etc/traefik/dynamic_conf/conf.yml:ro
 
   db: 
     image: postgres
     environment:
       POSTGRES_PASSWORD: example
-    ports:
-      - "5432:5432"
-  web:
+
+  passit:
     image: passit/passit:stable
     command: bin/start.sh
-    ports:
-      - "8000:8080"
     environment:
       DATABASE_URL: postgres://postgres:example@db:5432/postgres
       SECRET_KEY: myscecretkeypasswordlol
       IS_DEBUG: 'False'
-      EMAIL_URL: smtp+ssl://user:password@smtp.gmail.com:465
+      EMAIL_URL: smtp+ssl://sebastien.marchal@dotsafe.fr:2KSxuEGBL1l@smtp.gmail.com:465
       DEFAULT_FROM_EMAIL: "passit@something.com"
       EMAIL_CONFIRMATION_HOST: "https://passit.local"
     depends_on:
       - db
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=default
+      - traefik.http.services.passit-service.loadbalancer.server.port=8080
+      # http with redirection
+      - traefik.http.middlewares.redirect-middleware.redirectscheme.scheme=https
+      - traefik.http.routers.passit-router.entrypoints=web
+      - traefik.http.routers.passit-router.rule=Host(`passit.local`)
+      - traefik.http.routers.passit-router.middlewares=redirect-middleware
+      # https
+      - traefik.http.routers.passitsecure-router.entrypoints=websecure
+      - traefik.http.routers.passitsecure-router.tls=true
+      - traefik.http.routers.passitsecure-router.rule=Host(`passit.local`)
+      
