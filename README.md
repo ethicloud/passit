@@ -17,6 +17,3 @@ python manage.py migrate
 ## REVERSE PROXY
 * Reverse proxy Nginx avec TLS activé, certificat autosigné.
 
-
-
-
